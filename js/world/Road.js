@@ -49,12 +49,26 @@ export class Road {
     
     // Daha yumuşak virajlar için sinüs fonksiyonunu kullanalım
     generateSmoothRoad() {
-        // TAMAMEN DÜZ BİR YOL OLUŞTUR
-        // İlk 100 segment için düz yol noktaları oluştur
-        for (let i = 0; i < 100; i++) {
+    // HAFİF VİRAJLI YOL OLUŞTUR
+        // Viraj parametreleri
+        const amplitude = 30;       // 15'den 30'a çıkarıldı - DAHA BELİRGİN VİRAJLAR
+        const period = 30;         // 50'den 30'a düşürüldü - DAHA SIK VİRAJLAR
+        const secondaryPeriod = 15; // 20'den 15'e düşürüldü
+        
+        // İlk 300 segment için virajlı yol noktaları oluştur
+        for (let i = 0; i < 300; i++) {
+            // Ana viraj paterni (uzun dalgalar)
+            const mainCurve = Math.sin(i / period) * amplitude;
+            
+            // İkincil viraj paterni (kısa dalgalar)
+            const secondaryCurve = Math.sin(i / secondaryPeriod) * (amplitude / 3); // 1/4 yerine 1/3
+            
+            // Toplam viraj değeri
+            const totalCurve = mainCurve + secondaryCurve;
+            
             this.curvePoints.push({
                 index: i,
-                x: 0, // HEPSİ SIFIR - DÜZ YOL
+                x: totalCurve, // Virajlı yol - sin fonksiyonu
                 z: i * this.settings.segmentLength
             });
         }
@@ -94,12 +108,16 @@ export class Road {
         const roadGeometry = new THREE.BoxGeometry(
             this.settings.width, 
             0.1, 
-            this.settings.segmentLength * 1.05 // %5 daha uzun (örtüşme yaratır)
+            this.settings.segmentLength * 1.1 // %10 daha uzun (daha fazla örtüşme)
         );
         const roadMesh = new THREE.Mesh(roadGeometry, this.asphaltMaterial);
-        roadMesh.position.set(xPos, baseElevation, startZ + this.settings.segmentLength/2);
+        roadMesh.position.set(
+            xPos,
+            baseElevation, 
+            startZ + this.settings.segmentLength/2 + 0.05 // Hafif ileri pozisyon
+        );
         roadMesh.rotation.y = angle; // Viraj açısı
-        roadMesh.rotation.x = Math.atan2(nextPoint.x - point.x, this.settings.segmentLength) * 0.2; // Eğim
+        roadMesh.rotation.x = Math.atan2(nextPoint.x - point.x, this.settings.segmentLength) * 0.05; // Eğim
         group.add(roadMesh);
         
         // YOL KENARLARI - GRİ BANTLAR - DAHA GENİŞ
@@ -134,11 +152,9 @@ export class Road {
             // Tam ortalanmış çizgi pozisyonu
             const dashProgress = (dashZ - startZ) / this.settings.segmentLength;
             const lerpedX = xPos + (nextXPos - xPos) * dashProgress;
-            const lerpedElevation = baseElevation + 
-                (Math.sin((index + dashProgress) * 0.2) * 2 + Math.cos((index + dashProgress) * 0.05) * 1 - baseElevation) * dashProgress;
-            
+    
             const centerLineGeometry = new THREE.BoxGeometry(
-                0.15, 0.12, this.settings.stripeDashLength * 0.9
+                0.15, 0.15, this.settings.stripeDashLength * 0.9 // Y yüksekliği artırıldı
             );
             const centerLineMesh = new THREE.Mesh(centerLineGeometry, this.yellowLineMaterial);
             
@@ -148,7 +164,7 @@ export class Road {
                 this.settings.segmentLength
             );
             
-            centerLineMesh.position.set(lerpedX, lerpedElevation + 0.06, dashZ);
+            centerLineMesh.position.set(lerpedX, baseElevation + 0.08, dashZ); // Yüksekliği artırıldı
             centerLineMesh.rotation.y = localAngle;
             group.add(centerLineMesh);
         }
@@ -190,7 +206,7 @@ export class Road {
         
         // YOL KENARINA AĞAÇLAR EKLE
         if (index % 3 === 0) { // Her 3 segmentte bir
-            [-15, 15].forEach(offsetX => {
+            [-25, 25].forEach(offsetX => { // 15 yerine 25 - DAHA UZAĞA YERLEŞTİR
                 // Basit ağaç geometrisi
                 const trunkGeometry = new THREE.CylinderGeometry(0.5, 0.7, 3, 8);
                 const trunkMaterial = new THREE.MeshBasicMaterial({ color: 0x8B4513 });
@@ -206,8 +222,8 @@ export class Road {
                 tree.add(leaves);
                 
                 // DÜZ YOL için ağaç konumu
-                const randomOffset = (Math.random() - 0.5) * 5; // -2.5 ile 2.5 arası rastgele
-                const treeX = offsetX + randomOffset; // xPos kaldırıldı
+                const randomOffset = (Math.random() - 0.5) * 8; // 5 yerine 8 - DAHA GENİŞ DAĞILIM
+                const treeX = xPos + offsetX + randomOffset; // xPos ekledik! - VİRAJ TAKİP ETSİN
                 const treeZ = startZ + Math.random() * this.settings.segmentLength;
                 
                 tree.position.set(treeX, 0, treeZ);
@@ -250,14 +266,27 @@ export class Road {
         const vehicleZ = vehiclePosition.z;
         const currentSegmentIndex = Math.floor(vehicleZ / this.settings.segmentLength);
         
-        // YENİ: İhtiyaç oldukça daha fazla curvePoints ekle
+        // YENİ: İhtiyaç oldukça daha fazla virajlı curvePoints ekle
         const requiredPoints = currentSegmentIndex + 35; // 35 segment ilerisi için gerekli
         if (requiredPoints >= this.curvePoints.length) {
-            // Daha fazla düz yol noktası oluştur
+            // Daha fazla virajlı yol noktası oluştur - DAHA BELİRGİN VİRAJLAR!
             for (let i = this.curvePoints.length; i <= requiredPoints; i++) {
+                const amplitude = 30;       // VİRAJ GENİŞLİĞİ ARTIRILDI
+                const period = 30;         // VİRAJ SIKLIĞI ARTIRILDI
+                const secondaryPeriod = 15;
+                    
+                // Ana viraj paterni (uzun dalgalar)
+                const mainCurve = Math.sin(i / period) * amplitude;
+                
+                // İkincil viraj paterni (kısa dalgalar) - GÜÇLÜ
+                const secondaryCurve = Math.sin(i / secondaryPeriod) * (amplitude / 3);
+                
+                // Toplam viraj değeri
+                const totalCurve = mainCurve + secondaryCurve;
+                
                 this.curvePoints.push({
                     index: i,
-                    x: 0, // Düz yol
+                    x: totalCurve, // Virajlı yol - sin fonksiyonu - GÜÇLÜ
                     z: i * this.settings.segmentLength
                 });
             }
