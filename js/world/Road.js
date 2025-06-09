@@ -1,429 +1,302 @@
 import * as THREE from 'three';
-import { MathUtils } from '../utils/MathUtils.js';
 
 /**
- * Dinamik yol oluşturma ve yönetim sistemi
+ * Sonsuz yol sistemi - prosedürel oluşturma
  */
 export class Road {
     constructor(scene) {
         this.scene = scene;
         
-        // Yol grupları
-        this.roadGroup = new THREE.Group();
-        this.scene.add(this.roadGroup);
-        
-        // Yol özellikleri
-        this.roadWidth = 8; // metre
-        this.segmentLength = 20; // her segment 20m
-        this.segmentsAhead = 15; // önde kaç segment oluştur
-        this.segmentsBehind = 5; // arkada kaç segment tut
-        
-        // Yol segmentleri
-        this.segments = [];
-        this.lastPlayerZ = 0; // Oyuncunun son Z pozisyonu
-        
-        // Yol türleri ve varyasyonları
-        this.roadTypes = ['straight', 'curve_left', 'curve_right', 'slight_curve'];
-        this.currentDirection = 0; // Mevcut yol yönü (radyan)
-        
-        // Materyal ve geometriler
-        this.roadMaterial = null;
-        this.roadGeometry = null;
-        this.lineMaterial = null;
-        
-        // Yan nesneler (ağaçlar, tabelalar vs.)
-        this.roadside_objects = [];
-        
-        this.init();
-        console.log('🛣️ Yol sistemi başlatıldı');
-    }
-    
-    /**
-     * Yol sistemini başlat
-     */
-    init() {
-        this.createMaterials();
-        this.generateInitialRoad();
-    }
-    
-    /**
-     * Materyal ve tekstürleri oluştur
-     */
-    createMaterials() {
-        // Ana yol materyali
-        this.roadMaterial = new THREE.MeshLambertMaterial({
-            color: 0x444444
-        });
-        
-        // Yol çizgisi materyali
-        this.lineMaterial = new THREE.MeshBasicMaterial({
-            color: 0xffffff
-        });
-        
-        // Çim materyali
-        this.grassMaterial = new THREE.MeshLambertMaterial({
-            color: 0x228B22
-        });
-        
-        // Yol kenarı materyali
-        this.sidelineMaterial = new THREE.MeshBasicMaterial({
-            color: 0xffff00
-        });
-    }
-    
-    /**
-     * İlk yol segmentlerini oluştur
-     */
-    generateInitialRoad() {
-        for (let i = 0; i < this.segmentsAhead; i++) {
-            this.addRoadSegment(i * this.segmentLength);
-        }
-    }
-    
-    /**
-     * Yeni yol segmenti ekle
-     */
-    addRoadSegment(zPosition) {
-        const segment = this.createRoadSegment(zPosition);
-        this.segments.push(segment);
-        this.roadGroup.add(segment);
-    }
-    
-    /**
-     * Tek bir yol segmenti oluştur
-     */
-    createRoadSegment(zPosition) {
-        const segmentGroup = new THREE.Group();
-        segmentGroup.position.z = zPosition;
-        
-        // Yol türünü belirle (rastgele ama akıllı)
-        const roadType = this.selectRoadType();
-        
-        // Ana yol yüzeyi
-        const roadSurface = this.createRoadSurface(roadType);
-        segmentGroup.add(roadSurface);
-        
-        // Yol çizgileri
-        const roadLines = this.createRoadLines(roadType);
-        segmentGroup.add(roadLines);
-        
-        // Yol kenarları
-        const roadSides = this.createRoadSides(roadType);
-        segmentGroup.add(roadSides);
-        
-        // Çim alanları
-        const grassAreas = this.createGrassAreas(roadType);
-        segmentGroup.add(grassAreas);
-        
-        // Yan nesneler (rastgele)
-        if (Math.random() > 0.7) { // %30 şans
-            const sideObjects = this.createRoadsideObjects(roadType);
-            segmentGroup.add(sideObjects);
-        }
-        
-        // Segment bilgilerini kaydet
-        segmentGroup.userData = {
-            type: roadType,
-            zPosition: zPosition
+        // GELİŞTİRİLMİŞ AYARLAR
+        this.settings = {
+            width: 7,                // Biraz daha geniş yol
+            segmentLength: 15,       // Daha uzun segmentler (virajlar daha akıcı olur)
+            segmentCount: 30,
+            shoulderWidth: 1.5,      // Yol kenarı genişliği
+            stripeDashLength: 3,     // Çizgi uzunluğu
+            stripeDashGap: 2         // Çizgi aralığı
         };
         
-        return segmentGroup;
+        this.segments = {};
+        this.currentSegmentIndex = 0;
+        this.curvePoints = [];       // Viraj noktaları
+        
+        // GELİŞTİRİLMİŞ MATERYALLER
+        this.createImprovedMaterials();
+        
+        // DAHA AKICI YOL OLUŞTUR
+        this.generateSmoothRoad();
+        
+        console.log('🚗 GELİŞTİRİLMİŞ YOL SİSTEMİ HAZIR');
     }
     
-    /**
-     * Yol tipini seç (akıllı seçim)
-     */
-    selectRoadType() {
-        // Basit rastgele seçim - gelecekte daha karmaşık olabilir
-        const rand = Math.random();
+    createImprovedMaterials() {
+        // ASFALT - SİYAH AMA HAFIF DOKU İLE
+        this.asphaltMaterial = new THREE.MeshBasicMaterial({ color: 0x111111 }); // Biraz daha koyu
         
-        if (rand < 0.6) {
-            return 'straight';
-        } else if (rand < 0.8) {
-            return 'slight_curve';
-        } else if (rand < 0.9) {
-            return 'curve_left';
-        } else {
-            return 'curve_right';
+        // PARLAK BEYAZ ÇİZGİ
+        this.whiteLineMaterial = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
+        
+        // PARLAK SARI ÇİZGİ
+        this.yellowLineMaterial = new THREE.MeshBasicMaterial({ color: 0xFFFF00 });
+        
+        // YOL KENARI (AÇIK GRİ)
+        this.shoulderMaterial = new THREE.MeshBasicMaterial({ color: 0x777777 });
+        
+        // ÇİMEN KENARI
+        this.grassMaterial = new THREE.MeshBasicMaterial({ color: 0x477D35 });
+    }
+    
+    // Daha yumuşak virajlar için sinüs fonksiyonunu kullanalım
+    generateSmoothRoad() {
+        // TAMAMEN DÜZ BİR YOL OLUŞTUR
+        // İlk 100 segment için düz yol noktaları oluştur
+        for (let i = 0; i < 100; i++) {
+            this.curvePoints.push({
+                index: i,
+                x: 0, // HEPSİ SIFIR - DÜZ YOL
+                z: i * this.settings.segmentLength
+            });
+        }
+        
+        // İlk 30 segmenti oluştur
+        for (let i = 0; i < 30; i++) {
+            this.createSmoothSegment(i);
         }
     }
     
-    /**
-     * Ana yol yüzeyini oluştur
-     */
-    createRoadSurface(roadType) {
-        const geometry = new THREE.PlaneGeometry(this.roadWidth, this.segmentLength, 1, 4);
+    // Daha yumuşak virajlı segment - GELİŞTİRİLMİŞ SÜRÜM
+    createSmoothSegment(index) {
+        const group = new THREE.Group();
+        const startZ = index * this.settings.segmentLength;
         
-        // Curve efekti için vertex'leri manipüle et
-        if (roadType.includes('curve')) {
-            this.applyCurveToGeometry(geometry, roadType);
-        }
+        // Viraj noktası al
+        const point = this.curvePoints[index];
+        const nextPoint = this.curvePoints[index + 1] || point;
+        const prevPoint = this.curvePoints[index - 1] || point;
         
-        const road = new THREE.Mesh(geometry, this.roadMaterial);
-        road.rotation.x = -Math.PI / 2; // Yatay hale getir
-        road.receiveShadow = true;
+        // X pozisyonu - DAHA YUMUŞAK VİRAJ
+        const xPos = point.x;
+        const nextXPos = nextPoint.x;
         
-        return road;
-    }
-    
-    /**
-     * Geometriye curve efekti uygula
-     */
-    applyCurveToGeometry(geometry, roadType) {
-        const vertices = geometry.attributes.position.array;
-        const curveIntensity = roadType === 'slight_curve' ? 0.5 : 2.0;
-        const direction = roadType.includes('left') ? -1 : 1;
+        // Önceki segment ile birleştirme için tansiyon hesabı
+        const prevTangent = index > 0 ? (xPos - prevPoint.x) : 0;
+        const nextTangent = (nextXPos - xPos);
         
-        for (let i = 0; i < vertices.length; i += 3) {
-            const z = vertices[i + 2]; // Z koordinatı
-            const normalizedZ = (z + this.segmentLength / 2) / this.segmentLength; // 0-1 arası
+        // Viraj açısı hesapla - DAHA HASSAS
+        const angle = Math.atan2(nextXPos - xPos, this.settings.segmentLength);
+        
+        // YOL YÜKSELTİ HESABI - DAHA DÜŞÜK DEĞERLER
+        const baseElevation = 0; // Tamamen düz yol
+        
+        // ASFALT - SİYAH YOL - DAHA SİYAH
+        this.asphaltMaterial.color.set(0x050505); // DAHA KOYU SİYAH
+        const roadGeometry = new THREE.BoxGeometry(
+            this.settings.width, 
+            0.1, 
+            this.settings.segmentLength * 1.05 // %5 daha uzun (örtüşme yaratır)
+        );
+        const roadMesh = new THREE.Mesh(roadGeometry, this.asphaltMaterial);
+        roadMesh.position.set(xPos, baseElevation, startZ + this.settings.segmentLength/2);
+        roadMesh.rotation.y = angle; // Viraj açısı
+        roadMesh.rotation.x = Math.atan2(nextPoint.x - point.x, this.settings.segmentLength) * 0.2; // Eğim
+        group.add(roadMesh);
+        
+        // YOL KENARLARI - GRİ BANTLAR - DAHA GENİŞ
+        [-this.settings.width/2 - this.settings.shoulderWidth/2, 
+         this.settings.width/2 + this.settings.shoulderWidth/2].forEach(shoulderX => {
+            const shoulderGeometry = new THREE.BoxGeometry(
+                this.settings.shoulderWidth, 0.08, this.settings.segmentLength * 1.01
+            );
+            const shoulderMesh = new THREE.Mesh(shoulderGeometry, this.shoulderMaterial);
             
-            // Sinüs eğrisi uygula
-            vertices[i] += Math.sin(normalizedZ * Math.PI) * curveIntensity * direction;
+            // Viraj açısına göre pozisyon ayarla - GELİŞTİRİLMİŞ
+            const shiftedX = shoulderX * Math.cos(angle);
+            const shiftedZ = shoulderX * Math.sin(angle);
+            
+            shoulderMesh.position.set(
+                xPos + shiftedX, 
+                baseElevation - 0.01, // Asfaltın hemen altında
+                startZ + this.settings.segmentLength/2 - shiftedZ
+            );
+            shoulderMesh.rotation.y = angle;
+            shoulderMesh.rotation.x = roadMesh.rotation.x; // Aynı eğim
+            group.add(shoulderMesh);
+        });
+        
+        // YOL ORTA ÇİZGİSİ - PARLAK SARI KESİKLİ - DAHA PARLAK VE DÜZGÜN
+        const dashCount = Math.floor(this.settings.segmentLength / 
+                                    (this.settings.stripeDashLength + this.settings.stripeDashGap));
+        for (let i = 0; i < dashCount; i++) {
+            const dashStart = i * (this.settings.stripeDashLength + this.settings.stripeDashGap);
+            const dashZ = startZ + dashStart + this.settings.stripeDashLength/2;
+            
+            // Tam ortalanmış çizgi pozisyonu
+            const dashProgress = (dashZ - startZ) / this.settings.segmentLength;
+            const lerpedX = xPos + (nextXPos - xPos) * dashProgress;
+            const lerpedElevation = baseElevation + 
+                (Math.sin((index + dashProgress) * 0.2) * 2 + Math.cos((index + dashProgress) * 0.05) * 1 - baseElevation) * dashProgress;
+            
+            const centerLineGeometry = new THREE.BoxGeometry(
+                0.15, 0.12, this.settings.stripeDashLength * 0.9
+            );
+            const centerLineMesh = new THREE.Mesh(centerLineGeometry, this.yellowLineMaterial);
+            
+            // Viraj doğrultusunda dönüş
+            const localAngle = Math.atan2(
+                nextXPos - xPos, 
+                this.settings.segmentLength
+            );
+            
+            centerLineMesh.position.set(lerpedX, lerpedElevation + 0.06, dashZ);
+            centerLineMesh.rotation.y = localAngle;
+            group.add(centerLineMesh);
         }
         
-        geometry.attributes.position.needsUpdate = true;
-    }
-    
-    /**
-     * Yol çizgilerini oluştur
-     */
-    createRoadLines(roadType) {
-        const linesGroup = new THREE.Group();
+        // KENAR ÇİZGİLERİ - PARLAK BEYAZ - DAHA GENİŞ VE PARLAK
+        [-this.settings.width/2 + 0.1, this.settings.width/2 - 0.1].forEach(offsetX => {
+            // Her kenar için 3 segment - daha akıcı görünüm
+            const edgeSegments = 3;
+            for (let i = 0; i < edgeSegments; i++) {
+                const segStart = i * (this.settings.segmentLength / edgeSegments);
+                const segEnd = (i + 1) * (this.settings.segmentLength / edgeSegments);
+                const segLength = segEnd - segStart;
+                const segMidZ = startZ + segStart + segLength/2;
+                
+                // Bu segment için interpole edilmiş X pozisyonu
+                const segStartProgress = segStart / this.settings.segmentLength;
+                const segEndProgress = segEnd / this.settings.segmentLength;
+                const segStartX = xPos + (nextXPos - xPos) * segStartProgress;
+                const segEndX = xPos + (nextXPos - xPos) * segEndProgress;
+                const segMidX = (segStartX + segEndX) / 2;
+                
+                const edgeLineGeometry = new THREE.BoxGeometry(0.13, 0.12, segLength * 0.98);
+                const edgeLineMesh = new THREE.Mesh(edgeLineGeometry, this.whiteLineMaterial);
+                
+                // Viraj açısına göre pozisyon ve rotasyon
+                const localAngle = Math.atan2(segEndX - segStartX, segLength);
+                const shiftedX = offsetX * Math.cos(localAngle);
+                const shiftedZ = offsetX * Math.sin(localAngle);
+                
+                edgeLineMesh.position.set(
+                    segMidX + shiftedX, 
+                    baseElevation + 0.06, // Asfaltın biraz üstünde
+                    segMidZ - shiftedZ
+                );
+                edgeLineMesh.rotation.y = localAngle;
+                group.add(edgeLineMesh);
+            }
+        });
         
-        // Orta çizgi
-        const centerLineGeometry = new THREE.PlaneGeometry(0.2, this.segmentLength, 1, 8);
-        const centerLine = new THREE.Mesh(centerLineGeometry, this.lineMaterial);
-        centerLine.rotation.x = -Math.PI / 2;
-        centerLine.position.y = 0.01; // Yolun biraz üstünde
+        // YOL KENARINA AĞAÇLAR EKLE
+        if (index % 3 === 0) { // Her 3 segmentte bir
+            [-15, 15].forEach(offsetX => {
+                // Basit ağaç geometrisi
+                const trunkGeometry = new THREE.CylinderGeometry(0.5, 0.7, 3, 8);
+                const trunkMaterial = new THREE.MeshBasicMaterial({ color: 0x8B4513 });
+                const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+                
+                const leavesGeometry = new THREE.SphereGeometry(2, 8, 8);
+                const leavesMaterial = new THREE.MeshBasicMaterial({ color: 0x006400 });
+                const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial);
+                leaves.position.y = 2.5;
+                
+                const tree = new THREE.Group();
+                tree.add(trunk);
+                tree.add(leaves);
+                
+                // DÜZ YOL için ağaç konumu
+                const randomOffset = (Math.random() - 0.5) * 5; // -2.5 ile 2.5 arası rastgele
+                const treeX = offsetX + randomOffset; // xPos kaldırıldı
+                const treeZ = startZ + Math.random() * this.settings.segmentLength;
+                
+                tree.position.set(treeX, 0, treeZ);
+                group.add(tree);
+            });
+        }
         
-        // Kesikli çizgi efekti için segment'leri ayır
-        this.createDashedLine(centerLineGeometry);
-        
-        linesGroup.add(centerLine);
-        
-        return linesGroup;
-    }
-    
-    /**
-     * Kesikli çizgi oluştur
-     */
-    createDashedLine(geometry) {
-        const vertices = geometry.attributes.position.array;
-        
-        // Her 4 metre'de bir boşluk bırak
-        for (let i = 0; i < vertices.length; i += 3) {
-            const z = vertices[i + 2];
-            const segment = Math.floor((z + this.segmentLength / 2) / 2) % 4;
+        // YOL KENARINA KÜÇÜK TABELALAR EKLE
+        if (index % 5 === 0) { // Her 5 segmentte bir
+            const signPostGeometry = new THREE.BoxGeometry(0.2, 1.5, 0.2);
+            const signPostMaterial = new THREE.MeshBasicMaterial({ color: 0x888888 });
+            const signPost = new THREE.Mesh(signPostGeometry, signPostMaterial);
             
-            if (segment > 1) {
-                // Bu vertex'i gizle (alpha ile)
-                vertices[i + 1] = -10; // Y'yi aşağı taşı
+            const signGeometry = new THREE.BoxGeometry(1, 0.7, 0.1);
+            const signMaterial = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
+            const sign = new THREE.Mesh(signGeometry, signMaterial);
+            sign.position.y = 1.2;
+            
+            const signGroup = new THREE.Group();
+            signGroup.add(signPost);
+            signGroup.add(sign);
+            
+            const signSide = Math.random() > 0.5 ? 1 : -1;
+            const signX = xPos + (this.settings.width/2 + 1.5) * signSide;
+            const signZ = startZ + Math.random() * this.settings.segmentLength;
+            
+            signGroup.position.set(signX, 0, signZ);
+            group.add(signGroup);
+        }
+        
+        this.segments[index] = group;
+        this.scene.add(group);
+    }
+    
+    update(vehiclePosition) {
+        // Debug bilgisi ekle
+        console.log(`🚗 Araç pozisyonu: Z=${vehiclePosition.z}, segment=${Math.floor(vehiclePosition.z / this.settings.segmentLength)}`);
+        
+        // Basit segment yönetimi
+        const vehicleZ = vehiclePosition.z;
+        const currentSegmentIndex = Math.floor(vehicleZ / this.settings.segmentLength);
+        
+        // YENİ: İhtiyaç oldukça daha fazla curvePoints ekle
+        const requiredPoints = currentSegmentIndex + 35; // 35 segment ilerisi için gerekli
+        if (requiredPoints >= this.curvePoints.length) {
+            // Daha fazla düz yol noktası oluştur
+            for (let i = this.curvePoints.length; i <= requiredPoints; i++) {
+                this.curvePoints.push({
+                    index: i,
+                    x: 0, // Düz yol
+                    z: i * this.settings.segmentLength
+                });
             }
         }
         
-        geometry.attributes.position.needsUpdate = true;
-    }
-    
-    /**
-     * Yol kenarlarını oluştur
-     */
-    createRoadSides(roadType) {
-        const sidesGroup = new THREE.Group();
-        
-        // Sol kenar
-        const leftSideGeometry = new THREE.PlaneGeometry(0.3, this.segmentLength);
-        const leftSide = new THREE.Mesh(leftSideGeometry, this.sidelineMaterial);
-        leftSide.rotation.x = -Math.PI / 2;
-        leftSide.position.x = -this.roadWidth / 2 - 0.15;
-        leftSide.position.y = 0.02;
-        
-        // Sağ kenar
-        const rightSideGeometry = new THREE.PlaneGeometry(0.3, this.segmentLength);
-        const rightSide = new THREE.Mesh(rightSideGeometry, this.sidelineMaterial);
-        rightSide.rotation.x = -Math.PI / 2;
-        rightSide.position.x = this.roadWidth / 2 + 0.15;
-        rightSide.position.y = 0.02;
-        
-        sidesGroup.add(leftSide);
-        sidesGroup.add(rightSide);
-        
-        return sidesGroup;
-    }
-    
-    /**
-     * Çim alanlarını oluştur
-     */
-    createGrassAreas(roadType) {
-        const grassGroup = new THREE.Group();
-        
-        const grassWidth = 20; // Çim alanı genişliği
-        
-        // Sol çim alanı
-        const leftGrassGeometry = new THREE.PlaneGeometry(grassWidth, this.segmentLength);
-        const leftGrass = new THREE.Mesh(leftGrassGeometry, this.grassMaterial);
-        leftGrass.rotation.x = -Math.PI / 2;
-        leftGrass.position.x = -this.roadWidth / 2 - grassWidth / 2 - 0.5;
-        leftGrass.position.y = -0.01;
-        leftGrass.receiveShadow = true;
-        
-        // Sağ çim alanı
-        const rightGrassGeometry = new THREE.PlaneGeometry(grassWidth, this.segmentLength);
-        const rightGrass = new THREE.Mesh(rightGrassGeometry, this.grassMaterial);
-        rightGrass.rotation.x = -Math.PI / 2;
-        rightGrass.position.x = this.roadWidth / 2 + grassWidth / 2 + 0.5;
-        rightGrass.position.y = -0.01;
-        rightGrass.receiveShadow = true;
-        
-        grassGroup.add(leftGrass);
-        grassGroup.add(rightGrass);
-        
-        return grassGroup;
-    }
-    
-    /**
-     * Yol kenarı nesneleri oluştur
-     */
-    createRoadsideObjects(roadType) {
-        const objectsGroup = new THREE.Group();
-        
-        // Ağaçlar
-        const treeCount = MathUtils.randomInt(1, 3);
-        for (let i = 0; i < treeCount; i++) {
-            const tree = this.createTree();
-            
-            // Rastgele pozisyon (sol veya sağ)
-            const side = Math.random() > 0.5 ? 1 : -1;
-            tree.position.x = side * (this.roadWidth / 2 + MathUtils.random(5, 15));
-            tree.position.z = MathUtils.random(-this.segmentLength / 2, this.segmentLength / 2);
-            
-            objectsGroup.add(tree);
+        // İleride YENİ segmentler oluştur - DAHA FAZLA SEGMENT
+        for (let i = currentSegmentIndex; i <= currentSegmentIndex + 30; i++) {
+            if (i >= 0 && !this.segments[i]) {
+                this.createSmoothSegment(i);
+            }
         }
         
-        return objectsGroup;
-    }
-    
-    /**
-     * Basit ağaç oluştur
-     */
-    createTree() {
-        const treeGroup = new THREE.Group();
-        
-        // Gövde
-        const trunkGeometry = new THREE.CylinderGeometry(0.2, 0.3, 2);
-        const trunkMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
-        const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
-        trunk.position.y = 1;
-        trunk.castShadow = true;
-        
-        // Yapraklar
-        const leavesGeometry = new THREE.SphereGeometry(1.5);
-        const leavesMaterial = new THREE.MeshLambertMaterial({ color: 0x228B22 });
-        const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial);
-        leaves.position.y = 2.5;
-        leaves.castShadow = true;
-        
-        treeGroup.add(trunk);
-        treeGroup.add(leaves);
-        
-        return treeGroup;
-    }
-    
-    /**
-     * Yolu güncelle (oyuncu pozisyonuna göre)
-     */
-    update(playerPosition) {
-        const playerZ = playerPosition.z;
-        
-        // Yeni segment'ler ekle (önde)
-        while (this.getLastSegmentZ() < playerZ + (this.segmentsAhead * this.segmentLength)) {
-            const newZ = this.getLastSegmentZ() + this.segmentLength;
-            this.addRoadSegment(newZ);
+        // Geride kalan segmentleri kaldır - DAHA GEÇ SİL
+        for (let i in this.segments) {
+            if (i < currentSegmentIndex - 15) {
+                this.scene.remove(this.segments[i]);
+                this.segments[i].traverse((child) => {
+                    if (child.geometry) child.geometry.dispose();
+                });
+                delete this.segments[i];
+            }
         }
         
-        // Eski segment'leri kaldır (arkada)
-        while (this.getFirstSegmentZ() < playerZ - (this.segmentsBehind * this.segmentLength)) {
-            this.removeFirstSegment();
-        }
-        
-        this.lastPlayerZ = playerZ;
+        this.currentSegmentIndex = currentSegmentIndex;
     }
     
-    /**
-     * Son segment'in Z pozisyonu
-     */
-    getLastSegmentZ() {
-        if (this.segments.length === 0) return 0;
-        return this.segments[this.segments.length - 1].userData.zPosition;
-    }
-    
-    /**
-     * İlk segment'in Z pozisyonu
-     */
-    getFirstSegmentZ() {
-        if (this.segments.length === 0) return 0;
-        return this.segments[0].userData.zPosition;
-    }
-    
-    /**
-     * İlk segment'i kaldır
-     */
-    removeFirstSegment() {
-        if (this.segments.length > 0) {
-            const segment = this.segments.shift();
-            this.roadGroup.remove(segment);
-            
-            // Kaynakları temizle
-            segment.traverse((child) => {
-                if (child.geometry) child.geometry.dispose();
-                if (child.material) {
-                    if (Array.isArray(child.material)) {
-                        child.material.forEach(material => material.dispose());
-                    } else {
-                        child.material.dispose();
-                    }
-                }
-            });
-        }
-    }
-    
-    /**
-     * Belirli bir pozisyonda yol var mı kontrol et
-     */
-    isOnRoad(position) {
-        // Basit kontrol - x koordinatı yol genişliği içinde mi?
-        return Math.abs(position.x) <= this.roadWidth / 2;
-    }
-    
-    /**
-     * Yol genişliğini al
-     */
-    getRoadWidth() {
-        return this.roadWidth;
-    }
-    
-    /**
-     * Kaynakları temizle
-     */
     dispose() {
-        // Tüm segment'leri temizle
-        this.segments.forEach(segment => {
-            this.roadGroup.remove(segment);
+        Object.values(this.segments).forEach(segment => {
+            this.scene.remove(segment);
             segment.traverse((child) => {
                 if (child.geometry) child.geometry.dispose();
-                if (child.material) {
-                    if (Array.isArray(child.material)) {
-                        child.material.forEach(material => material.dispose());
-                    } else {
-                        child.material.dispose();
-                    }
-                }
+                if (child.material) child.material.dispose();
             });
         });
         
-        this.segments = [];
-        this.scene.remove(this.roadGroup);
-        
-        console.log('🗑️ Yol kaynakları temizlendi');
+        this.asphaltMaterial.dispose();
+        this.whiteLineMaterial.dispose();
+        this.yellowLineMaterial.dispose();
+        this.shoulderMaterial.dispose();
+        this.grassMaterial.dispose();
     }
 }

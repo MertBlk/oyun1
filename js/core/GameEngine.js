@@ -127,8 +127,10 @@ export class GameEngine {
         
         // Renk ayarları
         this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+        this.renderer.outputEncoding = THREE.sRGBEncoding;
+        this.renderer.gammaFactor = 2.2;
         this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        this.renderer.toneMappingExposure = 1.0;
+        this.renderer.toneMappingExposure = 1;
         
         // Arka plan rengi
         this.renderer.setClearColor(0x87CEEB, 1.0);

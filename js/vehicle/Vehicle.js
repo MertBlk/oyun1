@@ -23,13 +23,13 @@ export class Vehicle {
         this.acceleration = new THREE.Vector3(0, 0, 0);
         this.angularVelocity = 0;
         this.steering_angle = 0;
-        this.max_steering_angle = Math.PI / 6; // 30 derece
+        this.max_steering_angle = Math.PI / 2; // 30 derece
         this.acceleration_force = 5000;
         this.brake_force = 3000;
         this.mass = 1000;
         // Fizik özellikleri - BASİTLEŞTİRİLMİŞ
         this.maxSpeed = 100; // km/h
-        this.friction = 0.95; // Sürtünme katsayısı
+        this.friction = 1.95; // Sürtünme katsayısı
 
         // Araç boyutları
         this.dimensions = {
