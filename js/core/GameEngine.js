@@ -29,6 +29,9 @@ export class GameEngine {
         this.isPaused = false;
         this.gameSpeed = 1.0;
         
+        // Input durumu - EKLENDİ
+        this.lastCameraToggle = false;
+        
         // Performans
         this.clock = new THREE.Clock();
         this.deltaTime = 0;
@@ -107,6 +110,16 @@ export class GameEngine {
         
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        
+        // Canvas'ı focusable yap
+        this.canvas.setAttribute('tabindex', '0');
+        this.canvas.focus();
+        
+        // Canvas'a tıklandığında focus al
+        this.canvas.addEventListener('click', () => {
+            this.canvas.focus();
+            console.log('🎯 Canvas focus aldı');
+        });
         
         // Gölge ayarları
         this.renderer.shadowMap.enabled = true;
@@ -279,33 +292,38 @@ export class GameEngine {
      * Oyun nesnelerini güncelle
      */
     update() {
-        // Input'ları işle
+        // Input controller'ı güncelle
         this.inputController.update();
         
-        // Aracı güncelle
-        if (this.vehicle) {
-            this.vehicle.update(this.deltaTime, this.inputController);
+        // Input state'i al
+        const inputState = this.inputController.getInputState();
+        
+        // Kamera değiştirme kontrolü
+        if (inputState.cameraToggle && !this.lastCameraToggle) {
+            this.cameraController.switchMode();
+            console.log('📷 Kamera modu değişti');
+        }
+        this.lastCameraToggle = inputState.cameraToggle;
+        
+        // DEBUG - Input'ları kontrol et
+        if (inputState.forward || inputState.backward || inputState.left || inputState.right) {
+            console.log('🎮 GameEngine Input:', inputState);
         }
         
-        // Yolu güncelle (araçın konumuna göre)
-        if (this.road && this.vehicle) {
-            this.road.update(this.vehicle.position);
-        }
+        // Araç güncelle - deltaTime'ı burada geç
+        this.vehicle.update(this.deltaTime, inputState);
         
-        // Çevreyi güncelle
-        if (this.environment && this.vehicle) {
-            this.environment.update(this.vehicle.position);
-        }
+        // Yol güncelle
+        this.road.update(this.vehicle.getPosition());
         
-        // Kamerayı güncelle
-        if (this.cameraController) {
-            this.cameraController.update(this.deltaTime);
-        }
+        // Çevre güncelle
+        this.environment.update(this.deltaTime);
         
-        // UI'yi güncelle
-        if (this.uiManager && this.vehicle) {
-            this.uiManager.update(this.vehicle);
-        }
+        // Kamera güncelle
+        this.cameraController.update(this.deltaTime);
+        
+        // UI güncelle
+        this.uiManager.update(this.vehicle, this.fps);
     }
     
     /**

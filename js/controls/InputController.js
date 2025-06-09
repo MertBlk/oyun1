@@ -1,300 +1,58 @@
 import { MathUtils } from '../utils/MathUtils.js';
 
 /**
- * Kullanıcı girdilerini yöneten sınıf
+ * Oyun input'larını yönetir (klavye, mouse)
  */
 export class InputController {
     constructor() {
-        // Tuş durumları
-        this.keys = {
-            forward: false,    // W, ↑
-            backward: false,   // S, ↓
-            left: false,       // A, ←
-            right: false,      // D, →
-            brake: false       // Space
+        this.keys = {}; // Basılan tuşları sakla
+        this.inputState = {
+            forward: false,
+            backward: false,
+            left: false,
+            right: false,
+            handbrake: false,
+            cameraToggle: false,
+            reset: false,
+            pause: false
         };
         
-        // Tuş haritası
-        this.keyMap = {
-            // İleri hareket
-            'KeyW': 'forward',
-            'ArrowUp': 'forward',
-            
-            // Geri hareket
-            'KeyS': 'backward',
-            'ArrowDown': 'backward',
-            
-            // Sol hareket
-            'KeyA': 'left',
-            'ArrowLeft': 'left',
-            
-            // Sağ hareket
-            'KeyD': 'right',
-            'ArrowRight': 'right',
-            
-            // El freni
-            'Space': 'brake'
-        };
-        
-        // Mouse/Touch desteği için
-        this.mouse = {
-            x: 0,
-            y: 0,
-            isDown: false
-        };
-        
-        this.touch = {
-            x: 0,
-            y: 0,
-            isActive: false
-        };
-        
-        // Gamepad desteği
-        this.gamepad = null;
-        this.gamepadConnected = false;
-        
-        this.init();
-    }
-    
-    /**
-     * Input controller'ı başlat
-     */
-    init() {
-        this.setupKeyboardEvents();
-        this.setupMouseEvents();
-        this.setupTouchEvents();
-        this.setupGamepadEvents();
-        
+        this.setupEventListeners();
         console.log('🎮 Input Controller başlatıldı');
     }
     
     /**
-     * Klavye event'lerini ayarla
+     * Event listener'ları ayarla
      */
-    setupKeyboardEvents() {
+    setupEventListeners() {
+        // Keydown event'i
         document.addEventListener('keydown', (event) => {
-            this.onKeyDown(event);
+            this.keys[event.code] = true;
+            
+            // DEBUG - Basılan tuşu göster
+            console.log('🔽 Tuş basıldı:', event.code);
+            
+            // Varsayılan davranışları engelle (scroll vs.)
+            if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.code)) {
+                event.preventDefault();
+            }
         });
         
+        // Keyup event'i
         document.addEventListener('keyup', (event) => {
-            this.onKeyUp(event);
-        });
-        
-        // Context menu'yu engelle (sağ tık)
-        document.addEventListener('contextmenu', (event) => {
-            event.preventDefault();
-        });
-    }
-    
-    /**
-     * Mouse event'lerini ayarla
-     */
-    setupMouseEvents() {
-        document.addEventListener('mousedown', (event) => {
-            this.onMouseDown(event);
-        });
-        
-        document.addEventListener('mouseup', (event) => {
-            this.onMouseUp(event);
-        });
-        
-        document.addEventListener('mousemove', (event) => {
-            this.onMouseMove(event);
-        });
-    }
-    
-    /**
-     * Touch event'lerini ayarla (mobil destek)
-     */
-    setupTouchEvents() {
-        document.addEventListener('touchstart', (event) => {
-            this.onTouchStart(event);
-        });
-        
-        document.addEventListener('touchend', (event) => {
-            this.onTouchEnd(event);
-        });
-        
-        document.addEventListener('touchmove', (event) => {
-            this.onTouchMove(event);
-        });
-    }
-    
-    /**
-     * Gamepad event'lerini ayarla
-     */
-    setupGamepadEvents() {
-        window.addEventListener('gamepadconnected', (event) => {
-            this.onGamepadConnected(event);
-        });
-        
-        window.addEventListener('gamepaddisconnected', (event) => {
-            this.onGamepadDisconnected(event);
-        });
-    }
-    
-    /**
-     * Tuşa basıldığında
-     */
-    onKeyDown(event) {
-        const action = this.keyMap[event.code];
-        if (action && !this.keys[action]) {
-            this.keys[action] = true;
-            event.preventDefault();
-        }
-    }
-    
-    /**
-     * Tuş bırakıldığında
-     */
-    onKeyUp(event) {
-        const action = this.keyMap[event.code];
-        if (action) {
-            this.keys[action] = false;
-            event.preventDefault();
-        }
-    }
-    
-    /**
-     * Mouse basıldığında
-     */
-    onMouseDown(event) {
-        this.mouse.isDown = true;
-        this.updateMousePosition(event);
-    }
-    
-    /**
-     * Mouse bırakıldığında
-     */
-    onMouseUp(event) {
-        this.mouse.isDown = false;
-        this.updateMousePosition(event);
-    }
-    
-    /**
-     * Mouse hareket ettiğinde
-     */
-    onMouseMove(event) {
-        this.updateMousePosition(event);
-    }
-    
-    /**
-     * Mouse pozisyonunu güncelle
-     */
-    updateMousePosition(event) {
-        const rect = event.target.getBoundingClientRect();
-        this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-        this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-    }
-    
-    /**
-     * Touch başladığında
-     */
-    onTouchStart(event) {
-        event.preventDefault();
-        this.touch.isActive = true;
-        this.updateTouchPosition(event.touches[0]);
-    }
-    
-    /**
-     * Touch bittiğinde
-     */
-    onTouchEnd(event) {
-        event.preventDefault();
-        this.touch.isActive = false;
-    }
-    
-    /**
-     * Touch hareket ettiğinde
-     */
-    onTouchMove(event) {
-        event.preventDefault();
-        if (this.touch.isActive) {
-            this.updateTouchPosition(event.touches[0]);
-        }
-    }
-    
-    /**
-     * Touch pozisyonunu güncelle
-     */
-    updateTouchPosition(touch) {
-        const rect = touch.target.getBoundingClientRect();
-        this.touch.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
-        this.touch.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
-    }
-    
-    /**
-     * Gamepad bağlandığında
-     */
-    onGamepadConnected(event) {
-        this.gamepad = event.gamepad;
-        this.gamepadConnected = true;
-        console.log('🎮 Gamepad bağlandı:', this.gamepad.id);
-    }
-    
-    /**
-     * Gamepad bağlantısı kesildiğinde
-     */
-    onGamepadDisconnected(event) {
-        this.gamepad = null;
-        this.gamepadConnected = false;
-        console.log('🎮 Gamepad bağlantısı kesildi');
-    }
-    
-    /**
-     * Input'ları güncelle
-     */
-    update() {
-        // Gamepad input'larını kontrol et
-        if (this.gamepadConnected) {
-            this.updateGamepadInputs();
-        }
-        
-        // Touch input'larını klavye input'larına çevir (mobil destek)
-        if (this.touch.isActive) {
-            this.processTouchInputs();
-        }
-    }
-    
-    /**
-     * Gamepad input'larını güncelle
-     */
-    updateGamepadInputs() {
-        const gamepads = navigator.getGamepads();
-        const gamepad = gamepads[0]; // İlk gamepad'i kullan
-        
-        if (gamepad) {
-            // Analog stickler
-            const leftStickX = gamepad.axes[0];
-            const leftStickY = gamepad.axes[1];
-            const threshold = 0.2; // Dead zone
+            this.keys[event.code] = false;
             
-            // Sol stick ile hareket kontrolü
-            this.keys.left = leftStickX < -threshold;
-            this.keys.right = leftStickX > threshold;
-            this.keys.forward = leftStickY < -threshold;
-            this.keys.backward = leftStickY > threshold;
-            
-            // Butonlar
-            this.keys.brake = gamepad.buttons[0].pressed; // A butonu (Xbox)
-        }
-    }
-    
-    /**
-     * Touch input'larını işle
-     */
-    processTouchInputs() {
-        // Touch pozisyonuna göre basit kontrol
-        // Ekranın sol yarısı yön kontrolü, sağ yarısı gaz/fren
-        if (this.touch.x < 0) {
-            // Sol yarı - yön kontrolü
-            this.keys.left = this.touch.x < -0.5;
-            this.keys.right = false;
-        } else {
-            // Sağ yarı - gaz/fren
-            this.keys.forward = this.touch.y > 0;
-            this.keys.backward = this.touch.y < 0;
-        }
+            // DEBUG - Bırakılan tuşu göster
+            console.log('🔼 Tuş bırakıldı:', event.code);
+        });
+        
+        // Sayfa değiştiğinde tuşları temizle
+        document.addEventListener('blur', () => {
+            this.keys = {};
+            console.log('🔄 Tuşlar temizlendi (sayfa odağı kaybı)');
+        });
+        
+        console.log('🎮 Event listener\'lar ayarlandı');
     }
     
     /**
@@ -358,6 +116,13 @@ export class InputController {
     }
     
     /**
+     * Input controller'ı güncelle
+     */
+    update() {
+        this.updateInputStates();
+    }
+    
+    /**
      * Input durumlarını güncelle
      */
     updateInputStates() {
@@ -366,5 +131,29 @@ export class InputController {
         this.inputState.backward = this.keys['KeyS'] || this.keys['ArrowDown'] || false;
         this.inputState.left = this.keys['KeyA'] || this.keys['ArrowLeft'] || false;
         this.inputState.right = this.keys['KeyD'] || this.keys['ArrowRight'] || false;
+        
+        // Diğer kontroller
+        this.inputState.handbrake = this.keys['Space'] || false;
+        this.inputState.cameraToggle = this.keys['KeyC'] || false;
+        this.inputState.reset = this.keys['KeyR'] || false;
+        this.inputState.pause = this.keys['KeyP'] || false;
+        
+        // DEBUG - Input'ları konsola yazdır
+        if (this.inputState.forward || this.inputState.backward || this.inputState.left || this.inputState.right) {
+            console.log('🎮 Input State:', {
+                forward: this.inputState.forward,
+                backward: this.inputState.backward,
+                left: this.inputState.left,
+                right: this.inputState.right,
+                keys: Object.keys(this.keys).filter(key => this.keys[key])
+            });
+        }
+    }
+    
+    /**
+     * Input state'i al
+     */
+    getInputState() {
+        return { ...this.inputState }; // Copy return et
     }
 }

@@ -19,17 +19,23 @@ export class CameraController {
         
         this.currentMode = this.modes.THIRD_PERSON;
         
+        // MANUEL ROTASYON EKLEYELİM
+        this.manualRotation = {
+            x: 0,
+            y: 0
+        };
+        
         // Kamera ayarları
         this.settings = {
-            // Third person ayarları
+            // Third person ayarları - TAKİP HIZI ARTTIRILDI
             thirdPerson: {
-                distance: 10,          // Araçtan uzaklık
+                distance: 10,          // 12'den 10'a düşürüldü - daha yakın takip
                 height: 4,             // Yükseklik
                 angle: 0.1,            // Aşağı bakma açısı
-                followSpeed: 8,        // Takip hızı
-                rotationSpeed: 3,      // Rotasyon hızı
+                followSpeed: 18,        // 4'den 8'e çıkarıldı - daha hızlı takip
+                rotationSpeed: 6,      // 3'den 6'ya çıkarıldı - daha hızlı dönüş
                 offsetX: 0,            // Yan kayma
-                lookAhead: 2           // İlerisine bakma mesafesi
+                lookAhead: 2           // İlerisine bakma
             },
             
             // First person ayarları
@@ -96,46 +102,57 @@ export class CameraController {
      * Mouse kontrollerini ayarla
      */
     setupMouseControls() {
-        let isMouseDown = false;
+        this.mouseState = {
+            isDown: false,
+            lastX: 0,
+            lastY: 0,
+            sensitivity: 0.002
+        };
         
+        // Mouse event'leri - SAL TIK SAĞ TIK KARIŞIKLIĞINI ÇÖZELIM
         document.addEventListener('mousedown', (event) => {
-            if (event.button === 2) { // Sağ tık
-                isMouseDown = true;
-                this.mouseControl.enabled = true;
-                document.body.style.cursor = 'grabbing';
+            if (event.button === 0) { // Sol tık
+                this.mouseState.isDown = true;
+                this.mouseState.lastX = event.clientX;
+                this.mouseState.lastY = event.clientY;
                 event.preventDefault();
             }
+            // Sağ tık (button === 2) için hiçbir şey yapma
         });
         
         document.addEventListener('mouseup', (event) => {
-            if (event.button === 2) {
-                isMouseDown = false;
-                this.mouseControl.enabled = false;
-                document.body.style.cursor = 'default';
+            if (event.button === 0) { // Sol tık
+                this.mouseState.isDown = false;
             }
+            // Sağ tık için hiçbir şey yapma
         });
         
         document.addEventListener('mousemove', (event) => {
-            if (this.mouseControl.enabled && isMouseDown) {
-                this.mouseControl.yaw -= event.movementX * this.mouseControl.sensitivity;
-                this.mouseControl.pitch -= event.movementY * this.mouseControl.sensitivity;
+            if (this.mouseState.isDown && event.buttons === 1) { // Sadece sol tık sürüklemesi
+                const deltaX = event.clientX - this.mouseState.lastX;
+                const deltaY = event.clientY - this.mouseState.lastY;
                 
-                // Pitch'i sınırla
-                this.mouseControl.pitch = MathUtils.clamp(
-                    this.mouseControl.pitch,
-                    -this.mouseControl.maxPitch,
-                    this.mouseControl.maxPitch
-                );
-            }
-        });
-        
-        // Kamera modu değiştirme (C tuşu)
-        document.addEventListener('keydown', (event) => {
-            if (event.code === 'KeyC') {
-                this.switchCameraMode();
+                this.manualRotation.y -= deltaX * this.mouseState.sensitivity;
+                this.manualRotation.x -= deltaY * this.mouseState.sensitivity;
+                
+                this.manualRotation.x = MathUtils.clamp(this.manualRotation.x, -Math.PI/3, Math.PI/6);
+                
+                this.mouseState.lastX = event.clientX;
+                this.mouseState.lastY = event.clientY;
+                
                 event.preventDefault();
             }
         });
+        
+        // SADECE CANVAS İÇİN context menu'yu kapat
+        const canvas = document.getElementById('game-canvas');
+        if (canvas) {
+            canvas.addEventListener('contextmenu', (event) => {
+                event.preventDefault();
+            });
+        }
+        
+        console.log('🖱️ Mouse kontrolleri ayarlandı');
     }
     
     /**
@@ -195,40 +212,50 @@ export class CameraController {
     }
     
     /**
-     * Third person kamera hedeflerini hesapla
+     * Third person kamera hedeflerini hesapla - HIZ BAZLI TAKİP EKLENDİ
      */
     calculateThirdPersonTargets(vehiclePos, vehicleRot) {
         const settings = this.settings.thirdPerson;
         
-        // Araç arkasında pozisyon
-        const behindOffset = new THREE.Vector3(
-            settings.offsetX,
-            settings.height,
-            -settings.distance
+        // Hız bazlı uzaklık ayarlaması - yüksek hızda daha uzaktan takip
+        const speed = this.vehicle.getSpeed();
+        const baseDistance = settings.distance;
+        const speedBasedDistance = baseDistance + Math.min(speed / 20, 4); // Her 20 km/h için +1 birim, maksimum +4
+        
+        // Araç arkasında pozisyon - hız bazlı mesafe
+        const distance = speedBasedDistance;
+        const height = settings.height;
+        
+        // Araç yönünü al
+        const vehicleDirection = vehicleRot.y;
+        
+        // Kamera pozisyonunu araç arkasında hesapla
+        this.targetPosition.set(
+            vehiclePos.x - Math.sin(vehicleDirection) * distance,
+            vehiclePos.y + height,
+            vehiclePos.z - Math.cos(vehicleDirection) * distance
         );
         
-        // Araç rotasyonunu uygula
-        behindOffset.applyEuler(vehicleRot);
+        // Bakış hedefi - araç + hız bazlı ileri bakış
+        const speedBasedLookAhead = settings.lookAhead + Math.min(speed / 25, 3); // Hızda daha ileri bak
+        this.targetLookAt.set(
+            vehiclePos.x + Math.sin(vehicleDirection) * speedBasedLookAhead,
+            vehiclePos.y + 0.5, // Araç seviyesinde bak
+            vehiclePos.z + Math.cos(vehicleDirection) * speedBasedLookAhead
+        );
         
-        // Hedef pozisyon
-        this.targetPosition.copy(vehiclePos).add(behindOffset);
+        // Yüksek hızda kamerayı biraz yukarı çek
+        if (speed > 40) {
+            const speedFactor = Math.min((speed - 40) / 60, 0.8); // Maksimum 0.8 etki
+            this.targetPosition.y += speedFactor * 2.0; // Yükseklik artışı
+        }
         
-        // Bakış hedefi (araç + ileri yön)
-        const forwardOffset = new THREE.Vector3(0, 0, settings.lookAhead);
-        forwardOffset.applyEuler(vehicleRot);
-        this.targetLookAt.copy(vehiclePos).add(forwardOffset);
-        
-        // Hız bazlı ayarlama
-        const speed = this.vehicle.getSpeed();
-        const speedFactor = Math.min(speed / 50, 1); // 50 km/h'de maksimum
-        
-        // Yüksek hızda kamerayı daha uzağa çek
-        this.targetPosition.y += speedFactor * 2;
-        
-        // Hızlı virajlarda kamerayı daha yanlamasına al
-        const angularVel = Math.abs(this.vehicle.angularVelocity);
-        const lateralOffset = angularVel * 3;
-        this.targetPosition.x += Math.sign(this.vehicle.angularVelocity) * lateralOffset;
+        // Angular velocity etkisini minimal tut
+        const angularVel = this.vehicle.angularVelocity || 0;
+        if (Math.abs(angularVel) > 0.8) { // Sadece çok güçlü virajlarda
+            const lateralOffset = Math.sign(angularVel) * Math.min(Math.abs(angularVel) * 0.2, 0.5);
+            this.targetPosition.x += lateralOffset;
+        }
     }
     
     /**
@@ -277,17 +304,38 @@ export class CameraController {
     /**
      * Kamera hareketini smooth yap
      */
+    /**
+     * Kamera hareketini yumuşatma - HIZLI TAKİP İÇİN DÜZELTİLDİ
+     */
     smoothCameraMovement(deltaTime) {
-        const followSpeed = this.currentMode === this.modes.THIRD_PERSON ? 
-            this.settings.thirdPerson.followSpeed : 12;
-        const rotationSpeed = this.currentMode === this.modes.THIRD_PERSON ?
-            this.settings.thirdPerson.rotationSpeed : 8;
+        // Follow speed'leri yeterince hızlı yap
+        const baseFollowSpeed = this.currentMode === this.modes.THIRD_PERSON ? 
+            this.settings.thirdPerson.followSpeed * 0.8 : 8; // 0.4'den 0.8'e çıkarıldı
+        const baseRotationSpeed = this.currentMode === this.modes.THIRD_PERSON ?
+            this.settings.thirdPerson.rotationSpeed * 0.8 : 6; // 0.5'den 0.8'e çıkarıldı
         
-        // Pozisyon smoothing
-        this.camera.position.lerp(this.targetPosition, deltaTime * followSpeed);
+        // Hız bazlı ayarlama - düşük hızda daha yavaş, yüksek hızda daha hızlı
+        const vehicleSpeed = this.vehicle.getSpeed();
+        let speedMultiplier = 1.0; // Varsayılan çarpan
         
-        // LookAt smoothing
-        this.currentLookAt.lerp(this.targetLookAt, deltaTime * rotationSpeed);
+        if (vehicleSpeed > 50) {
+            // Yüksek hızda daha agresif takip
+            speedMultiplier = 1.0 + (vehicleSpeed - 50) / 100; // Maksimum 1.5x hız
+        } else if (vehicleSpeed < 20) {
+            // Düşük hızda daha yumuşak
+            speedMultiplier = 0.7;
+        }
+        
+        const followSpeed = baseFollowSpeed * speedMultiplier;
+        const rotationSpeed = baseRotationSpeed * speedMultiplier;
+        
+        // Pozisyon smoothing - daha hızlı lerp
+        const maxPositionLerp = Math.min(deltaTime * followSpeed, 0.20); // 0.08'den 0.20'ye çıkarıldı
+        this.camera.position.lerp(this.targetPosition, maxPositionLerp);
+        
+        // LookAt smoothing - daha hızlı
+        const maxRotationLerp = Math.min(deltaTime * rotationSpeed, 0.15); // 0.06'dan 0.15'e çıkarıldı
+        this.currentLookAt.lerp(this.targetLookAt, maxRotationLerp);
         
         // Kamerayı hedefi takip ettir
         this.camera.lookAt(this.currentLookAt);

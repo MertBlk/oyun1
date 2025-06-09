@@ -47,6 +47,20 @@ function initGame() {
  */
 function startGameEngine() {
     try {
+        // Loading screen'i kaldır
+        const loadingElement = document.getElementById('loading');
+        if (loadingElement) {
+            loadingElement.style.display = 'none';
+        }
+        
+        // UI'yi göster
+        const uiElement = document.getElementById('ui');
+        if (uiElement) {
+            uiElement.classList.remove('hidden');
+        }
+        
+        console.log('🎮 Loading screen kaldırıldı, UI aktif');
+        
         // Canvas elementinin varlığını kontrol et
         const canvas = document.getElementById('game-canvas');
         if (!canvas) {

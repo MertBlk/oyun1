@@ -116,13 +116,13 @@ export class UIManager {
     /**
      * UI'yi güncelle
      */
-    update(vehicle) {
+    update(vehicle, fps = 60) {
         this.updateCounter++;
         
         // Belirli aralıklarla güncelle (performans için)
         if (this.updateCounter % this.settings.updateFrequency === 0) {
             this.updateSpeedometer(vehicle.getSpeed());
-            this.updateOtherMetrics(vehicle);
+            this.updateOtherMetrics(vehicle, fps);
         }
         
         // Talimatları otomatik gizle
@@ -187,13 +187,14 @@ export class UIManager {
     /**
      * Diğer metrikleri güncelle
      */
-    updateOtherMetrics(vehicle) {
+    updateOtherMetrics(vehicle, fps = 60) {
         // Gelecekte daha fazla bilgi eklenebilir:
         // - Yakıt
         // - Motor RPM
         // - Gear
         // - Mini harita
         // - Zamanlama
+        // - FPS: fps değişkeni şurada kullanılabilir
     }
     
     /**

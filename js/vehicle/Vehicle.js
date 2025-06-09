@@ -8,28 +8,29 @@ export class Vehicle {
     constructor(scene) {
         this.scene = scene;
         
-        // Araç grubu - tüm araç parçalarını içerir
+        // THREE.js Group - EKLE
         this.group = new THREE.Group();
         
-        // Fizik özellikleri
+        // Temel özellikler
         this.position = new THREE.Vector3(0, 0, 0);
+        this.rotation = new THREE.Euler(0, 0, 0); // THREE.Euler objesi olarak değiştir
+        this.rotationY = 0; // Y ekseni rotasyonu için ayrı sayı
+        this.currentSpeed = 0; // m/s cinsinden
+        this.speed = 0; // km/h cinsinden (UI için)
+        
+        // Fizik property'leri - EKLE
         this.velocity = new THREE.Vector3(0, 0, 0);
         this.acceleration = new THREE.Vector3(0, 0, 0);
-        this.rotation = new THREE.Euler(0, 0, 0);
         this.angularVelocity = 0;
-        
-        // Araç özellikleri
-        this.mass = 1000; // kg
-        this.maxSpeed = 30; // m/s (~108 km/h)
-        this.acceleration_force = 8000; // N
-        this.brake_force = 12000; // N
         this.steering_angle = 0;
-        this.max_steering_angle = Math.PI / 4; // 45 derece
-        
-        // Direnç kuvvetleri
-        this.air_resistance = 0.98;
-        this.rolling_resistance = 0.95;
-        
+        this.max_steering_angle = Math.PI / 6; // 30 derece
+        this.acceleration_force = 5000;
+        this.brake_force = 3000;
+        this.mass = 1000;
+        // Fizik özellikleri - BASİTLEŞTİRİLMİŞ
+        this.maxSpeed = 100; // km/h
+        this.friction = 0.95; // Sürtünme katsayısı
+
         // Araç boyutları
         this.dimensions = {
             width: 1.8,
@@ -43,7 +44,6 @@ export class Vehicle {
         
         // Animasyon ve efektler
         this.isGrounded = true;
-        this.speed = 0; // Hız (km/h)
         this.engineSound = null; // Gelecekte ses sistemi için
         
         this.createVehicle();
@@ -142,7 +142,7 @@ export class Vehicle {
      * Fizik sistemini ayarla
      */
     setupPhysics() {
-        // Başlangıç değerleri
+        // Başlangıç değerleri - önceden tanımlanmış vectorları kullan
         this.velocity.set(0, 0, 0);
         this.acceleration.set(0, 0, 0);
         this.angularVelocity = 0;
@@ -151,59 +151,161 @@ export class Vehicle {
     /**
      * Aracı güncelle
      */
-    update(deltaTime, inputController) {
+    update(deltaTime, inputState) {
         // Input'ları al
-        const forwardInput = inputController.getForwardInput();
-        const sideInput = inputController.getSideInput();
-        const brakeInput = inputController.getBrakeInput();
+        const throttle = inputState.forward ? 1 : (inputState.backward ? -0.6 : 0);
+        const brake = inputState.handbrake ? 1 : 0;
         
-        // Fizik hesaplamaları
-        this.updatePhysics(deltaTime, forwardInput, sideInput, brakeInput);
+        // STEERING - DÜZELTİLDİ - YÖN SORUNU ÇÖZÜLDÜ
+        let steering = 0;
+        if (inputState.left) steering = 1;    // A tuşu = SOLA (pozitif rotasyon)
+        if (inputState.right) steering = -1;  // D tuşu = SAĞA (negatif rotasyon)
         
-        // Pozisyon ve rotasyonu güncelle
-        this.updateTransform();
+        // DEBUG - daha az spam
+        if (throttle !== 0 && Date.now() - (this.lastDebugLog || 0) > 1000) { // 1 saniyede bir
+            console.log('🚗 Throttle aktif:', throttle, 'Input:', inputState);
+            this.lastDebugLog = Date.now();
+        }
         
-        // Tekerlek animasyonları
-        this.updateWheelAnimations(deltaTime);
+        // BASİT FİZİK - kompleks fizik yerine
+        if (Math.abs(throttle) > 0.1) {
+            // İleri/geri hareket
+            const acceleration = throttle * 50; // Sabit ivme
+            this.currentSpeed += acceleration * deltaTime;
+            
+            // Maksimum hızı sınırla
+            this.currentSpeed = MathUtils.clamp(this.currentSpeed, -30, 100);
+        } else {
+            // Doğal yavaşlama
+            this.currentSpeed *= 0.95;
+        }
+        
+        // Direksiyon - Angular velocity de eklensin, DÜZELTİLDİ
+        if (Math.abs(steering) > 0.1 && Math.abs(this.currentSpeed) > 1) {
+            const rotationChange = steering * 0.015 * (this.currentSpeed / 50); // 0.02'den 0.015'e düşürüldü
+            this.rotationY += rotationChange;
+            
+            // Angular velocity'yi daha yumuşak hesapla (kamera için)
+            this.angularVelocity = MathUtils.lerp(this.angularVelocity, rotationChange / deltaTime, 0.3);
+        } else {
+            // Angular velocity'yi yumuşak sıfırla
+            this.angularVelocity *= 0.85; // 0.9'dan 0.85'e düşürüldü - daha hızlı sıfırlama
+        }
+        
+        // Pozisyonu güncelle
+        const moveDistance = this.currentSpeed * deltaTime;
+        this.position.x += Math.sin(this.rotationY) * moveDistance;
+        this.position.z += Math.cos(this.rotationY) * moveDistance;
+        
+        // THREE.Euler objesini güncelle
+        this.rotation.set(0, this.rotationY, 0);
+        
+        // Mesh'i güncelle
+        this.group.position.copy(this.position);
+        this.group.rotation.copy(this.rotation);
         
         // Hız hesapla (km/h)
-        this.speed = this.velocity.length() * 3.6;
+        this.speed = Math.abs(this.currentSpeed) * 3.6;
+        
+        // Debug - daha az spam
+        if (Date.now() - (this.lastSpeedLog || 0) > 2000) { // 2 saniyede bir
+            console.log('🚗 Speed:', this.speed.toFixed(1), 'Position:', this.position.x.toFixed(1), this.position.z.toFixed(1));
+            this.lastSpeedLog = Date.now();
+        }
+    }
+    
+    /**
+     * Araç pozisyonunu al
+     */
+    getPosition() {
+        return this.position.clone();
+    }
+    
+    /**
+     * Araç rotasyonunu al
+     */
+    getRotation() {
+        return this.rotation.clone();
+    }
+    
+    /**
+     * Araç hızını al (km/h)
+     */
+    getSpeed() {
+        return this.speed || 0;
+    }
+    
+    /**
+     * Araç mesh'ini al
+     */
+    getMesh() {
+        return this.group;
+    }
+    
+    /**
+     * Aracın yönünü al (radyan)
+     */
+    getDirection() {
+        return this.rotationY;
+    }
+    
+    /**
+     * Aracın hızını m/s cinsinden al
+     */
+    getVelocity() {
+        return this.currentSpeed;
+    }
+    
+    /**
+     * Araç bilgilerini al (debug için)
+     */
+    getInfo() {
+        return {
+            position: this.position.clone(),
+            rotation: this.rotationY,
+            speed: this.speed,
+            velocity: this.currentSpeed
+        };
     }
     
     /**
      * Fizik hesaplamalarını yap
      */
-    updatePhysics(deltaTime, forwardInput, sideInput, brakeInput) {
+    updatePhysics(deltaTime, throttle, steering, brake) {
         // Direksiyon açısını güncelle
         this.steering_angle = MathUtils.lerp(
             this.steering_angle,
-            sideInput * this.max_steering_angle,
+            steering * this.max_steering_angle,
             deltaTime * 8
         );
         
-        // Kuvvetleri hesapla
+        // Kuvvetleri hesapla - BU KISMI DÜZELTELİM
         const forces = new THREE.Vector3(0, 0, 0);
         
-        // İleri/geri kuvvet
-        if (Math.abs(forwardInput) > 0.1) {
-            const engineForce = forwardInput * this.acceleration_force;
-            forces.z += engineForce;
+        // İleri/geri kuvvet - DOĞRUDAN UYGULA
+        if (Math.abs(throttle) > 0.1) {
+            // Aracın yönünü dikkate alarak kuvvet uygula
+            const forward = new THREE.Vector3(0, 0, 1);
+            forward.applyEuler(this.rotation);
+            
+            const engineForce = throttle * this.acceleration_force;
+            forces.add(forward.multiplyScalar(engineForce));
         }
         
         // Fren kuvveti
-        if (brakeInput > 0.1) {
+        if (brake > 0.1) {
             const brakeDirection = this.velocity.clone().normalize().multiplyScalar(-1);
-            forces.add(brakeDirection.multiplyScalar(this.brake_force * brakeInput));
+            forces.add(brakeDirection.multiplyScalar(this.brake_force * brake));
         }
         
-        // Hava direnci
+        // Hava direnci - azalt
         const airResistanceForce = this.velocity.clone()
-            .multiplyScalar(-this.velocity.lengthSq() * 0.5);
+            .multiplyScalar(-this.velocity.lengthSq() * 0.1); // 0.5'den 0.1'e düşür
         forces.add(airResistanceForce);
         
-        // Yuvarlanma direnci
+        // Yuvarlanma direnci - azalt
         const rollingResistanceForce = this.velocity.clone()
-            .multiplyScalar(-50);
+            .multiplyScalar(-10); // 50'den 10'a düşür
         forces.add(rollingResistanceForce);
         
         // Newton'un ikinci yasası: F = ma -> a = F/m
@@ -217,34 +319,21 @@ export class Vehicle {
             this.velocity.normalize().multiplyScalar(this.maxSpeed);
         }
         
-        // Açısal hız (direksiyon)
+        // Açısal hız (direksiyon) - BASITLEŞTIR
         if (this.velocity.length() > 0.1 && Math.abs(this.steering_angle) > 0.01) {
             this.angularVelocity = (this.steering_angle * this.velocity.length()) / this.dimensions.length;
         } else {
-            this.angularVelocity *= 0.95; // Yavaşça durdur
+            this.angularVelocity *= 0.95;
         }
         
-        // Pozisyonu güncelle
-        const velocityDelta = this.velocity.clone().multiplyScalar(deltaTime);
-        
-        // Aracın yönünü dikkate al
-        const forward = new THREE.Vector3(0, 0, 1);
-        forward.applyEuler(this.rotation);
-        const right = new THREE.Vector3(1, 0, 0);
-        right.applyEuler(this.rotation);
-        
-        // Hareket vektörünü hesapla
-        const movement = new THREE.Vector3();
-        movement.add(forward.multiplyScalar(velocityDelta.z));
-        movement.add(right.multiplyScalar(velocityDelta.x));
-        
-        this.position.add(movement);
+        // Pozisyonu güncelle - BASITLEŞTIR
+        this.position.add(this.velocity.clone().multiplyScalar(deltaTime));
         
         // Rotasyonu güncelle
         this.rotation.y += this.angularVelocity * deltaTime;
         
-        // Direnç kuvvetlerini uygula
-        this.velocity.multiplyScalar(this.air_resistance);
+        // Direnç kuvvetlerini uygula - AZALT
+        this.velocity.multiplyScalar(0.99); // 0.98'den 0.99'a çıkar
     }
     
     /**
@@ -287,36 +376,6 @@ export class Vehicle {
         this.updateTransform();
         
         console.log('🔄 Araç sıfırlandı');
-    }
-    
-    /**
-     * Aracın mevcut hızını al (km/h)
-     */
-    getSpeed() {
-        return this.speed;
-    }
-    
-    /**
-     * Aracın mevcut pozisyonunu al
-     */
-    getPosition() {
-        return this.position.clone();
-    }
-    
-    /**
-     * Aracın mevcut rotasyonunu al
-     */
-    getRotation() {
-        return this.rotation.clone();
-    }
-    
-    /**
-     * Aracın ön yönünü al (vector)
-     */
-    getForwardDirection() {
-        const forward = new THREE.Vector3(0, 0, 1);
-        forward.applyEuler(this.rotation);
-        return forward;
     }
     
     /**
