@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Araba Sürüş Oyunu</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+            color: white;
+        }
+
+        #gameContainer {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+
+        #gameCanvas {
+            display: block;
+            outline: none;
+        }
+
+        #ui {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        #speedometer {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 10px;
+            border: 2px solid #00ff88;
+            min-width: 120px;
+        }
+
+        #speed {
+            font-size: 24px;
+            font-weight: bold;
+            color: #00ff88;
+            text-align: center;
+        }
+
+        #instructions {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 10px;
+            border: 2px solid #ffaa00;
+            max-width: 300px;
+        }
+
+        #instructions h3 {
+            color: #ffaa00;
+            margin-bottom: 10px;
+        }
+
+        #instructions p {
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            font-size: 24px;
+            z-index: 200;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            #instructions {
+                max-width: 250px;
+                font-size: 12px;
+            }
+            
+            #speedometer {
+                bottom: 10px;
+                right: 10px;
+                padding: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Yükleme Ekranı -->
+    <div id="loading" class="loading-screen">
+        <div class="loading-content">
+            <h2>🏎️ Oyun Yükleniyor...</h2>
+            <div class="loading-bar">
+                <div class="loading-progress"></div>
+            </div>
+            <p>Motorlar ısınıyor...</p>
+        </div>
+    </div>
+
+    <!-- Ana Oyun Canvas'ı -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- Oyun UI -->
+    <div id="ui" class="game-ui hidden">
+        <!-- Hız Göstergesi -->
+        <div class="speedometer">
+            <div class="speed-display">
+                <span id="speed-value">0</span>
+                <span class="unit">km/h</span>
+            </div>
+            <div class="speed-bar">
+                <div id="speed-bar-fill" class="speed-bar-fill"></div>
+            </div>
+        </div>
+
+        <!-- Kontrol Talimatları -->
+        <div class="controls">
+            <div class="control-group">
+                <h3>🎮 Kontroller</h3>
+                <div class="control-item">
+                    <span class="key">W/↑</span>
+                    <span>İleri</span>
+                </div>
+                <div class="control-item">
+                    <span class="key">S/↓</span>
+                    <span>Geri</span>
+                </div>
+                <div class="control-item">
+                    <span class="key">A/←</span>
+                    <span>Sol</span>
+                </div>
+                <div class="control-item">
+                    <span class="key">D/→</span>
+                    <span>Sağ</span>
+                </div>
+                <div class="control-item">
+                    <span class="key">C</span>
+                    <span>Kamera</span>
+                </div>
+                <div class="control-item">
+                    <span class="key">Space</span>
+                    <span>El Freni</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Performans Göstergesi -->
+        <div class="performance">
+            <div class="fps-counter">
+                FPS: <span id="fps-value">0</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Modülleri -->
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>

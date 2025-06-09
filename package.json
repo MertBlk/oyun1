@@ -1,0 +1,30 @@
+{
+  "name": "threejs-car-game",
+  "version": "1.0.0",
+  "description": "Three.js ile geliştirilmiş 3D araba sürüş oyunu",
+  "main": "index.html",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "serve": "http-server . -p 3000 -o",
+    "start": "npm run serve"
+  },
+  "keywords": [
+    "threejs",
+    "game",
+    "3d",
+    "car",
+    "driving",
+    "javascript"
+  ],
+  "author": "Mert Bolukbasi",
+  "license": "MIT",
+  "devDependencies": {
+    "vite": "^5.0.0",
+    "http-server": "^14.1.1"
+  },
+  "dependencies": {
+    "three": "^0.160.0"
+  }
+}
